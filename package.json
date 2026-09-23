@@ -1,0 +1,250 @@
+{
+  "name": "git-insight",
+  "displayName": "Git Insight",
+  "description": "Explain a local Git repository: contributor stats, code history, date activity and branch comparison. Works offline.",
+  "version": "0.1.0",
+  "publisher": "hluf",
+  "license": "MIT",
+  "engines": {
+    "vscode": "^1.90.0"
+  },
+  "categories": [
+    "SCM Providers",
+    "Visualization"
+  ],
+  "keywords": [
+    "git",
+    "contributors",
+    "blame",
+    "history",
+    "statistics"
+  ],
+  "main": "./dist/extension.js",
+  "activationEvents": [
+    "onWebviewPanel:gitInsight.stats"
+  ],
+  "scripts": {
+    "build": "node esbuild.mjs",
+    "watch": "node esbuild.mjs --watch",
+    "vscode:prepublish": "node esbuild.mjs --production",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "coverage": "vitest run --coverage",
+    "package": "vsce package",
+    "test:e2e": "npm run build && node test/e2e/run.mjs"
+  },
+  "contributes": {
+    "commands": [
+      {
+        "command": "gitInsight.selectRepository",
+        "title": "Select Repository",
+        "category": "Git Insight",
+        "icon": "$(repo)"
+      },
+      {
+        "command": "gitInsight.showContributorStats",
+        "title": "Show Contributor Stats",
+        "category": "Git Insight",
+        "icon": "$(graph)"
+      },
+      {
+        "command": "gitInsight.refreshContributors",
+        "title": "Refresh Contributors",
+        "category": "Git Insight",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "gitInsight.setStatsFilters",
+        "title": "Set Stats Filters…",
+        "category": "Git Insight",
+        "icon": "$(filter)"
+      },
+      {
+        "command": "gitInsight.reviewAliases",
+        "title": "Review Alias Suggestions…",
+        "category": "Git Insight",
+        "icon": "$(person-add)"
+      },
+      {
+        "command": "gitInsight.exportMailmap",
+        "title": "Export Aliases as .mailmap…",
+        "category": "Git Insight"
+      },
+      {
+        "command": "gitInsight.exportStatsCsv",
+        "title": "Export Stats as CSV…",
+        "category": "Git Insight"
+      },
+      {
+        "command": "gitInsight.exportStatsMarkdown",
+        "title": "Export Stats as Markdown…",
+        "category": "Git Insight"
+      },
+      {
+        "command": "gitInsight.clearCache",
+        "title": "Clear Cache",
+        "category": "Git Insight"
+      }
+    ],
+    "menus": {
+      "commandPalette": [
+        {
+          "command": "gitInsight.selectRepository",
+          "when": "gitInsight.multiRepo"
+        }
+      ],
+      "view/title": [
+        {
+          "command": "gitInsight.showContributorStats",
+          "when": "view == gitInsight.contributors",
+          "group": "navigation@1"
+        },
+        {
+          "command": "gitInsight.setStatsFilters",
+          "when": "view == gitInsight.contributors",
+          "group": "navigation@2"
+        },
+        {
+          "command": "gitInsight.refreshContributors",
+          "when": "view == gitInsight.contributors",
+          "group": "navigation@3"
+        },
+        {
+          "command": "gitInsight.selectRepository",
+          "when": "view == gitInsight.contributors && gitInsight.multiRepo",
+          "group": "navigation@9"
+        },
+        {
+          "command": "gitInsight.reviewAliases",
+          "when": "view == gitInsight.contributors",
+          "group": "1_aliases@1"
+        },
+        {
+          "command": "gitInsight.exportMailmap",
+          "when": "view == gitInsight.contributors",
+          "group": "1_aliases@2"
+        },
+        {
+          "command": "gitInsight.exportStatsCsv",
+          "when": "view == gitInsight.contributors",
+          "group": "2_export@1"
+        },
+        {
+          "command": "gitInsight.exportStatsMarkdown",
+          "when": "view == gitInsight.contributors",
+          "group": "2_export@2"
+        },
+        {
+          "command": "gitInsight.clearCache",
+          "when": "view == gitInsight.contributors",
+          "group": "3_cache@1"
+        }
+      ]
+    },
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "gitInsight",
+          "title": "Git Insight",
+          "icon": "media/icon.svg"
+        }
+      ]
+    },
+    "views": {
+      "gitInsight": [
+        {
+          "id": "gitInsight.contributors",
+          "name": "Contributors"
+        }
+      ]
+    },
+    "viewsWelcome": [
+      {
+        "view": "gitInsight.contributors",
+        "contents": "No Git repository found in this workspace.\n[Open Folder](command:vscode.openFolder)",
+        "when": "gitInsight.ready && !gitInsight.hasRepo"
+      }
+    ],
+    "configuration": {
+      "title": "Git Insight",
+      "properties": {
+        "gitInsight.gitPath": {
+          "type": "string",
+          "default": "",
+          "scope": "machine-overridable",
+          "markdownDescription": "Path to the `git` executable. Leave empty to use `git` from `PATH`."
+        },
+        "gitInsight.stats.excludeBots": {
+          "type": "boolean",
+          "default": true,
+          "description": "Hide bot accounts (dependabot, github-actions, …) from contributor stats."
+        },
+        "gitInsight.stats.botPatterns": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [
+            "\\[bot\\]",
+            "^github-actions",
+            "dependabot",
+            "renovate",
+            "^noreply@github\\.com$",
+            "^actions@github\\.com$"
+          ],
+          "description": "Case-insensitive regular expressions matched against an author name or email to detect bots."
+        },
+        "gitInsight.stats.excludePaths": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [
+            "**/package-lock.json",
+            "**/npm-shrinkwrap.json",
+            "**/yarn.lock",
+            "**/pnpm-lock.yaml",
+            "**/bun.lockb",
+            "**/Cargo.lock",
+            "**/poetry.lock",
+            "**/composer.lock",
+            "**/Gemfile.lock",
+            "**/go.sum",
+            "**/dist/**",
+            "**/*.min.js",
+            "**/*.min.css"
+          ],
+          "description": "Glob patterns whose line changes are not counted. Commit counts are unaffected."
+        },
+        "gitInsight.stats.aliasSimilarityThreshold": {
+          "type": "number",
+          "default": 0.9,
+          "minimum": 0.7,
+          "maximum": 1,
+          "description": "Jaro-Winkler similarity (0.7–1) above which two normalized names are suggested as the same person."
+        },
+        "gitInsight.stats.treeLimit": {
+          "type": "number",
+          "default": 20,
+          "minimum": 1,
+          "maximum": 500,
+          "description": "Number of contributors listed in the sidebar."
+        }
+      }
+    }
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.4",
+    "@types/picomatch": "^4.0.3",
+    "@types/vscode": "^1.90.0",
+    "@vitest/coverage-v8": "^5.0.1",
+    "@vscode/vsce": "^4.0.0",
+    "chart.js": "^4.5.1",
+    "esbuild": "^0.28.2",
+    "typescript": "^7.0.2",
+    "vitest": "^5.0.1"
+  },
+  "dependencies": {
+    "picomatch": "^4.0.7"
+  }
+}
