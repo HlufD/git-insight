@@ -1,0 +1,19 @@
+␞aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa␟bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb␟Smith, John␟john@x.com␟2026-08-03T10:45:00+03:00␟Fix total␟with ␟ in subject
+
+diff --git a/src/new.ts b/src/new.ts
+--- a/src/old.ts
++++ b/src/new.ts
+@@ -10,3 +12,4 @@
+ function total(a, b) {
+--- a/looks-like-a-header
++++ b/also-not-a-header
++  return a + b;
+ }
+␞bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb␟␟Zoë Ünïcode␟zoe@x.com␟2026-08-01T09:00:00+00:00␟Add total
+
+diff --git a/src/old.ts b/src/old.ts
+new file mode 100644
+--- /dev/null
++++ "b/src/caf\303\251.ts"
+@@ -0,0 +10 @@
++function total(a, b) {

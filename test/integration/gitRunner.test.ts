@@ -61,3 +61,28 @@ describe('GitRunner', () => {
     expect(Date.now() - started).toBeLessThan(1000);
   });
 });
+
+describe('GitRunner.runBuffer', () => {
+  let repo: TempRepo;
+  beforeAll(() => {
+    repo = new TempRepo();
+    repo.commit('A <a@x>', { 'crlf.txt': 'one\r\ntwo\r\n', 'bin.dat': Buffer.from([0, 255, 10, 13]) });
+  });
+  afterAll(() => repo.remove());
+
+  it('returns file contents byte for byte', async () => {
+    const runner = new GitRunner(repo.root);
+    expect((await runner.runBuffer(['show', 'HEAD:crlf.txt'])).toString('utf8')).toBe('one\r\ntwo\r\n');
+    expect([...(await runner.runBuffer(['show', 'HEAD:bin.dat']))]).toEqual([0, 255, 10, 13]);
+  });
+
+  it('refuses output above the size limit', async () => {
+    await expect(new GitRunner(repo.root).runBuffer(['show', 'HEAD:crlf.txt'], { maxBytes: 4 })).rejects.toThrow(/larger than/);
+  });
+
+  it('reports each invocation once', async () => {
+    const calls: GitInvocation[] = [];
+    await new GitRunner(repo.root, { onInvocation: (c) => calls.push(c) }).runBuffer(['show', 'HEAD:crlf.txt']);
+    expect(calls).toHaveLength(1);
+  });
+});

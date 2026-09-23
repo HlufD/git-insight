@@ -1,0 +1,10 @@
+␞cccccccccccccccccccccccccccccccccccccccc␟aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa␟A␟a@x␟2026-08-05T10:00:00+02:00␟Move and tweak
+
+R087	src/old.ts	src/new.ts
+M	"docs/\303\251t\303\251.md"
+D	gone.txt
+C100	a.txt	b.txt
+T	link
+␞aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa␟␟B␟b@x␟2026-08-01T10:00:00+02:00␟Initial
+
+A	src/old.ts

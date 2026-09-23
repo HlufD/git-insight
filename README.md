@@ -2,7 +2,7 @@
 
 Git Insight explains the history of a local Git repository and the people behind it. It runs entirely on your machine: no GitHub account, no network access.
 
-> **Status:** Feature 1 (Contributor Stats) is complete. Code history, date activity, branch comparison and the optional AI explanation are planned (see [CHANGELOG](CHANGELOG.md)).
+> **Status:** Contributor Stats and Who Wrote This? are complete. Date activity, branch comparison and the optional AI explanation are planned (see [CHANGELOG](CHANGELOG.md)).
 
 ## Contributor Stats
 
@@ -46,6 +46,30 @@ Decisions are saved in `.gitinsight/aliases.json`, including rejected pairs, whi
 
 Bot accounts (`dependabot[bot]`, `github-actions`, …) are hidden by default.
 
+## Who wrote this, and when?
+
+Put the cursor in a function, or select some code, then right-click → **Git Insight → Who Wrote This?** The **Code History** view shows every commit that changed that code: subject, author, date and short SHA. The commit that first added it is marked with a star. Click a commit to open a diff of the file before and after it, scrolled to the code. Commits that added a file, and root commits, diff against an empty file.
+
+What "this" means:
+
+| You have… | Git Insight follows… |
+| --- | --- |
+| The cursor inside a function or method | That function (boundaries from the language server's document symbols) |
+| The cursor in a class, outside any method | The whole class |
+| A selected identifier, such as `getUser` | Its definition in this file if there is one, otherwise the name |
+| Selected lines | Those lines |
+| The cursor outside any symbol | The current line |
+
+How the history is found:
+
+1. **Line range** (`git log -L start,end:file`) when the file matches the last commit. The language server knows the function's exact boundaries, so this is the most precise mode.
+2. **Function name** (`git log -L :name:file`) when the file has unsaved or uncommitted changes, because editor line numbers may no longer match the committed file. Each mode is the fallback for the other.
+3. **Whole file** (`git log --follow`) if neither works, for example when the lines no longer exist. The view says why it fell back.
+
+Line history follows the code across file renames.
+
+A second section lists commits **on any branch** that added or removed the name (`git log -S --all`). This finds where a function first appeared, even if it came from another file or branch. Turn it off with `gitInsight.history.searchAllBranches` on very large repositories.
+
 ## Commands
 
 | Command | What it does |
@@ -56,6 +80,8 @@ Bot accounts (`dependabot[bot]`, `github-actions`, …) are hidden by default.
 | Git Insight: Review Alias Suggestions… | Accept, split, rename or reject identity groups |
 | Git Insight: Export Aliases as .mailmap… | Writes confirmed groups to a `.mailmap` file |
 | Git Insight: Export Stats as CSV… / Markdown… | Saves the current table |
+| Git Insight: Who Wrote This? | History of the function or selection under the cursor (also in the editor context menu) |
+| Git Insight: Refresh Code History | Runs the last history query again |
 | Git Insight: Select Repository | Chooses the repository in a multi-root workspace |
 | Git Insight: Clear Cache | Forgets cached scans |
 
@@ -69,6 +95,8 @@ Bot accounts (`dependabot[bot]`, `github-actions`, …) are hidden by default.
 | `gitInsight.stats.excludePaths` | lockfiles, `**/dist/**`, `**/*.min.js`, `**/*.min.css` | Globs left out of line counts |
 | `gitInsight.stats.aliasSimilarityThreshold` | `0.9` | Name similarity (0.7–1) needed for a suggestion |
 | `gitInsight.stats.treeLimit` | `20` | Contributors listed in the sidebar |
+| `gitInsight.history.maxCommits` | `200` | Commits loaded for a code or file history |
+| `gitInsight.history.searchAllBranches` | `true` | Also list commits on any branch that added or removed the name |
 
 ## Performance and caching
 

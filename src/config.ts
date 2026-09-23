@@ -7,6 +7,8 @@ export interface GitInsightConfig {
   excludePaths: string[];
   aliasThreshold: number;
   treeLimit: number;
+  historyMaxCommits: number;
+  historySearchAllBranches: boolean;
 }
 
 export function readConfig(scope?: vscode.Uri): GitInsightConfig {
@@ -18,6 +20,8 @@ export function readConfig(scope?: vscode.Uri): GitInsightConfig {
     excludePaths: c.get<string[]>('stats.excludePaths', []),
     aliasThreshold: clamp(c.get<number>('stats.aliasSimilarityThreshold', 0.9), 0.7, 1),
     treeLimit: Math.max(1, Math.floor(c.get<number>('stats.treeLimit', 20))),
+    historyMaxCommits: Math.max(1, Math.floor(c.get<number>('history.maxCommits', 200))),
+    historySearchAllBranches: c.get<boolean>('history.searchAllBranches', true),
   };
 }
 

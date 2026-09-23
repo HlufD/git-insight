@@ -92,6 +92,30 @@
         "command": "gitInsight.clearCache",
         "title": "Clear Cache",
         "category": "Git Insight"
+      },
+      {
+        "command": "gitInsight.whoWroteThis",
+        "title": "Who Wrote This?",
+        "category": "Git Insight",
+        "icon": "$(history)"
+      },
+      {
+        "command": "gitInsight.refreshCodeHistory",
+        "title": "Refresh Code History",
+        "category": "Git Insight",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "gitInsight.openCommitDiff",
+        "title": "Open Commit Diff",
+        "category": "Git Insight",
+        "icon": "$(diff)"
+      },
+      {
+        "command": "gitInsight.copyCommitSha",
+        "title": "Copy Commit SHA",
+        "category": "Git Insight",
+        "icon": "$(copy)"
       }
     ],
     "menus": {
@@ -99,6 +123,18 @@
         {
           "command": "gitInsight.selectRepository",
           "when": "gitInsight.multiRepo"
+        },
+        {
+          "command": "gitInsight.whoWroteThis",
+          "when": "editorIsOpen"
+        },
+        {
+          "command": "gitInsight.openCommitDiff",
+          "when": "false"
+        },
+        {
+          "command": "gitInsight.copyCommitSha",
+          "when": "false"
         }
       ],
       "view/title": [
@@ -146,6 +182,36 @@
           "command": "gitInsight.clearCache",
           "when": "view == gitInsight.contributors",
           "group": "3_cache@1"
+        },
+        {
+          "command": "gitInsight.refreshCodeHistory",
+          "when": "view == gitInsight.codeHistory",
+          "group": "navigation@1"
+        }
+      ],
+      "editor/context": [
+        {
+          "submenu": "gitInsight.editor",
+          "group": "7_gitInsight",
+          "when": "resourceScheme == file"
+        }
+      ],
+      "gitInsight.editor": [
+        {
+          "command": "gitInsight.whoWroteThis",
+          "group": "1_history@1"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "gitInsight.copyCommitSha",
+          "when": "view == gitInsight.codeHistory && viewItem == gitInsight.commit",
+          "group": "inline@1"
+        },
+        {
+          "command": "gitInsight.copyCommitSha",
+          "when": "view == gitInsight.codeHistory && viewItem == gitInsight.commit",
+          "group": "1_copy@1"
         }
       ]
     },
@@ -163,6 +229,10 @@
         {
           "id": "gitInsight.contributors",
           "name": "Contributors"
+        },
+        {
+          "id": "gitInsight.codeHistory",
+          "name": "Code History"
         }
       ]
     },
@@ -171,6 +241,10 @@
         "view": "gitInsight.contributors",
         "contents": "No Git repository found in this workspace.\n[Open Folder](command:vscode.openFolder)",
         "when": "gitInsight.ready && !gitInsight.hasRepo"
+      },
+      {
+        "view": "gitInsight.codeHistory",
+        "contents": "Put the cursor in a function, or select some code, then ask who wrote it and when.\n[Who Wrote This?](command:gitInsight.whoWroteThis)\nAlso available from the editor right-click menu under Git Insight."
       }
     ],
     "configuration": {
@@ -237,9 +311,27 @@
           "minimum": 1,
           "maximum": 500,
           "description": "Number of contributors listed in the sidebar."
+        },
+        "gitInsight.history.maxCommits": {
+          "type": "number",
+          "default": 200,
+          "minimum": 1,
+          "maximum": 5000,
+          "description": "Maximum commits loaded for a code or file history."
+        },
+        "gitInsight.history.searchAllBranches": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Also list commits on any branch that added or removed the name (`git log -S --all`). Can be slow on very large repositories."
         }
       }
-    }
+    },
+    "submenus": [
+      {
+        "id": "gitInsight.editor",
+        "label": "Git Insight"
+      }
+    ]
   },
   "devDependencies": {
     "@types/node": "^22.20.4",

@@ -1,6 +1,7 @@
 import { spawn } from 'node:child_process';
 import { createInterface } from 'node:readline';
-import { GitCancelledError, GitCommandError, GitNotFoundError, NotARepositoryError } from './errors';
+import { PassThrough, type Readable } from 'node:stream';
+import { GitCancelledError, GitCommandError, GitInsightError, GitNotFoundError, NotARepositoryError } from './errors';
 
 export interface GitRunOptions {
   signal?: AbortSignal;
@@ -31,6 +32,7 @@ export const DEFAULT_GLOBAL_ARGS: readonly string[] = [
 
 const KILL_GRACE_MS = 500;
 const STDERR_LIMIT = 64 * 1024;
+const DEFAULT_MAX_BUFFER = 50 * 1024 * 1024;
 
 /**
  * The only way the extension talks to git. Uses `spawn` with an argument array
@@ -56,6 +58,42 @@ export class GitRunner {
 
   /** Runs git and calls `onLine` for every stdout line, without buffering the whole output. */
   streamLines(args: readonly string[], onLine: (line: string) => void, options: GitRunOptions = {}): Promise<void> {
+    return this.execute(args, options, (stdout, fail) => {
+      stdout.setEncoding('utf8');
+      const reader = createInterface({ input: stdout, crlfDelay: Infinity });
+      reader.on('line', (line) => {
+        try {
+          onLine(line);
+        } catch (error) {
+          fail(error);
+        }
+      });
+    });
+  }
+
+  /**
+   * Runs git and returns stdout as raw bytes (file contents keep CRLF, trailing
+   * newlines and encoding). Fails instead of buffering more than `maxBytes`.
+   */
+  async runBuffer(args: readonly string[], options: GitRunOptions & { maxBytes?: number } = {}): Promise<Buffer> {
+    const maxBytes = options.maxBytes ?? DEFAULT_MAX_BUFFER;
+    const chunks: Buffer[] = [];
+    let size = 0;
+    await this.execute(args, options, (stdout, fail) => {
+      stdout.on('data', (chunk: Buffer) => {
+        size += chunk.length;
+        if (size > maxBytes) fail(new GitInsightError(`git ${args[0] ?? ''} output is larger than ${Math.round(maxBytes / 1_048_576)} MB.`));
+        else chunks.push(chunk);
+      });
+    });
+    return Buffer.concat(chunks);
+  }
+
+  private execute(
+    args: readonly string[],
+    options: GitRunOptions,
+    consume: (stdout: Readable, fail: (error: unknown) => void) => void,
+  ): Promise<void> {
     const { signal } = options;
     if (signal?.aborted) return Promise.reject(new GitCancelledError());
 
@@ -71,7 +109,7 @@ export class GitRunner {
 
       let settled = false;
       let cancelled = false;
-      let callbackError: unknown;
+      let consumerError: unknown;
       let stderr = '';
       let killTimer: NodeJS.Timeout | undefined;
 
@@ -101,32 +139,39 @@ export class GitRunner {
         if (stderr.length < STDERR_LIMIT) stderr += chunk;
       });
 
-      child.stdout.setEncoding('utf8');
-      const reader = createInterface({ input: child.stdout, crlfDelay: Infinity });
-      reader.on('line', (line) => {
-        if (cancelled || callbackError) return;
-        try {
-          onLine(line);
-        } catch (error) {
-          callbackError = error;
-          kill();
-        }
+      // Output after a cancel or a consumer error is dropped.
+      const gated = new PassThrough();
+      child.stdout.on('data', (chunk: Buffer) => {
+        if (!cancelled && consumerError === undefined) gated.write(chunk);
+      });
+      child.stdout.on('end', () => gated.end());
+      consume(gated, (error) => {
+        if (consumerError !== undefined) return;
+        consumerError = error;
+        kill();
       });
 
       child.on('error', (error: NodeJS.ErrnoException) => {
         finish(error.code === 'ENOENT' ? new GitNotFoundError(this.gitPath) : error);
       });
 
-      // 'close' fires after stdout has been fully read, so every line has been delivered.
+      // Wait for the consumer to see all output before settling.
       child.on('close', (exitCode) => {
-        this.onInvocation?.({ args, durationMs: Date.now() - started, exitCode });
-        if (callbackError) return finish(callbackError);
-        if (cancelled) return finish(new GitCancelledError());
-        if (exitCode !== 0) {
-          if (/not a git repository/i.test(stderr)) return finish(new NotARepositoryError(this.cwd));
-          return finish(new GitCommandError(args, exitCode, stderr));
-        }
-        finish();
+        let reported = false;
+        const settle = () => {
+          if (reported) return;
+          reported = true;
+          this.onInvocation?.({ args, durationMs: Date.now() - started, exitCode });
+          if (consumerError !== undefined) return finish(consumerError);
+          if (cancelled) return finish(new GitCancelledError());
+          if (exitCode !== 0) {
+            if (/not a git repository/i.test(stderr)) return finish(new NotARepositoryError(this.cwd));
+            return finish(new GitCommandError(args, exitCode, stderr));
+          }
+          finish();
+        };
+        if (gated.readableEnded || gated.destroyed) settle();
+        else gated.once('end', settle).once('close', settle);
       });
     });
   }

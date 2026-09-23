@@ -12,10 +12,10 @@
 - Sidebar view of top contributors.
 - Bot accounts hidden by default; generated files excluded from line counts.
 - Cache keyed by refs, `.mailmap` and filters; cancellable scans.
+- **Who wrote this and when?**: history of the function, class, selection or line under the cursor (`git log -L`), with fallback between line range, function name and whole file (`--follow`); commits on any branch that added or removed the name (`git log -S --all`); first-added commit marked; click to diff parent ↔ commit (empty side for added files and root commits); copy SHA.
 
 ### Planned
 
-- Who wrote this and when? (code history for a function or selection)
 - What happened on this date?
 - Branch comparison for a file or function
 - Explain business logic (optional, Claude API)
