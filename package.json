@@ -4,6 +4,8 @@
   "description": "Explain a local Git repository: contributor stats, code history, date activity and branch comparison. Works offline.",
   "version": "0.1.0",
   "publisher": "hluf",
+  "icon": "media/icon.png",
+  "preview": true,
   "license": "MIT",
   "repository": {
     "type": "git",
