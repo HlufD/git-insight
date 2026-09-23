@@ -325,6 +325,19 @@
           "type": "boolean",
           "default": true,
           "markdownDescription": "Also list commits on any branch that added or removed the name (`git log -S --all`). Can be slow on very large repositories."
+        },
+        "gitInsight.avatars.source": {
+          "type": "string",
+          "enum": [
+            "remote",
+            "initials"
+          ],
+          "default": "remote",
+          "enumDescriptions": [
+            "GitHub avatar and username when available (GitHub noreply email, or the GitHub API for repositories hosted on GitHub), else Gravatar; initials when offline or not found.",
+            "Coloured initials only. Git Insight makes no network requests for avatars."
+          ],
+          "markdownDescription": "Where author avatars come from. `remote` contacts GitHub and Gravatar (see the README privacy section); `initials` never uses the network."
         }
       }
     },

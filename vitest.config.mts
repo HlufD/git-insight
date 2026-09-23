@@ -6,7 +6,7 @@ export default defineConfig({
     testTimeout: 30_000,
     coverage: {
       provider: 'v8',
-      include: ['src/git/**', 'src/stats/**', 'src/cache/**', 'src/history/**'],
+      include: ['src/git/**', 'src/stats/**', 'src/cache/**', 'src/history/**', 'src/avatars/**'],
       reporter: ['text', 'html'],
       thresholds: { lines: 90, functions: 90, statements: 90, branches: 85 },
     },

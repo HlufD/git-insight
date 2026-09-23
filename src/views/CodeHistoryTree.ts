@@ -4,8 +4,10 @@ import { Commands } from '../constants';
 import type { FileRef } from '../git/parsers/historyLog';
 import { primaryFile, type CodeHistory, type Timeline, type TimelineEntry } from '../history/codeHistory';
 import { SymbolKinds } from '../history/target';
+import type { AvatarService, PersonAvatar } from '../services/AvatarService';
 import type { HistoryService } from '../services/HistoryService';
 import { formatReadableDate } from '../stats/formatDate';
+import { escapeMd, personTooltip } from './personTooltip';
 
 /** Arguments of the `openCommitDiff` command. */
 export interface CommitDiffArgs {
@@ -25,20 +27,25 @@ export class CommitNode extends vscode.TreeItem {
     readonly files: FileRef[],
     line: number | undefined,
     firstLabel: string,
+    avatar: PersonAvatar,
+    commitUrl: string | undefined,
   ) {
     super(entry.subject || '(no message)', files.length > 1 ? vscode.TreeItemCollapsibleState.Collapsed : vscode.TreeItemCollapsibleState.None);
     const date = formatReadableDate(entry.authorDate, { shortMonth: true });
-    this.description = `${entry.firstAdded ? `${firstLabel} · ` : ''}${entry.authorName} · ${date} · ${entry.sha.slice(0, 7)}`;
-    this.iconPath = new vscode.ThemeIcon(entry.firstAdded ? 'star-full' : entry.parents.length > 1 ? 'git-merge' : 'git-commit');
+    const tags = [entry.firstAdded ? `★ ${firstLabel}` : '', entry.parents.length > 1 ? 'merge' : ''].filter(Boolean);
+    this.description = [...tags, entry.authorName, date, entry.sha.slice(0, 7)].join(' · ');
+    this.iconPath = avatar.icon;
     this.contextValue = 'gitInsight.commit';
 
-    const tooltip = new vscode.MarkdownString(undefined, true);
-    tooltip.appendMarkdown(`**${escape(entry.subject)}**\n\n`);
-    tooltip.appendMarkdown(`$(person) ${escape(entry.authorName)} <${escape(entry.authorEmail)}>\n\n`);
+    // Hover card: who (avatar, name, @username, email), then the commit.
+    const tooltip = personTooltip(entry.authorName, [entry.authorEmail], avatar);
+    tooltip.appendMarkdown('---\n\n');
+    tooltip.appendMarkdown(`**${escapeMd(entry.subject)}**\n\n`);
     tooltip.appendMarkdown(`$(calendar) ${formatReadableDate(entry.authorDate, { weekday: true, time: true })} · \`${entry.authorDate}\`\n\n`);
-    tooltip.appendMarkdown(`$(git-commit) \`${entry.sha}\``);
+    tooltip.appendMarkdown(`$(git-commit) \`${entry.sha.slice(0, 12)}\``);
+    if (commitUrl) tooltip.appendMarkdown(` · [View on GitHub](${commitUrl})`);
     if (entry.firstAdded) tooltip.appendMarkdown(`\n\n$(star-full) ${firstLabel}`);
-    if (files.length) tooltip.appendMarkdown(`\n\n${files.map((f) => `- ${escape(describeFile(f))}`).join('\n')}`);
+    if (files.length) tooltip.appendMarkdown(`\n\n${files.map((f) => `- ${escapeMd(describeFile(f))}`).join('\n')}`);
     this.tooltip = tooltip;
 
     if (files.length === 1) {
@@ -71,11 +78,11 @@ export class CodeHistoryTree implements vscode.TreeDataProvider<Node>, vscode.Di
   private readonly changed = new vscode.EventEmitter<void>();
   readonly onDidChangeTreeData = this.changed.event;
   private readonly view: vscode.TreeView<Node>;
-  private readonly subscription: vscode.Disposable;
+  private readonly subscriptions: vscode.Disposable[];
 
-  constructor(viewId: string, private readonly history: HistoryService) {
+  constructor(viewId: string, private readonly history: HistoryService, private readonly avatars: AvatarService) {
     this.view = vscode.window.createTreeView(viewId, { treeDataProvider: this });
-    this.subscription = history.onDidChange(() => this.render());
+    this.subscriptions = [history.onDidChange(() => this.render()), avatars.onDidChange(() => this.changed.fire())];
   }
 
   private render(): void {
@@ -89,16 +96,22 @@ export class CodeHistoryTree implements vscode.TreeDataProvider<Node>, vscode.Di
     return node;
   }
 
-  getChildren(parent?: Node): Node[] {
+  async getChildren(parent?: Node): Promise<Node[]> {
     const { status, request, result, error } = this.history.state;
     if (!request) return [];
     const repoRoot = request.repo.root;
 
     if (parent instanceof SectionNode) {
-      const nodes: Node[] = parent.timeline.entries.map((e) => {
-        const files = parent.line ? e.files.slice(0, 1) : pickFiles(e, request.target.path);
-        return new CommitNode(e, repoRoot, files, parent.line ? e.line : undefined, parent.firstLabel);
-      });
+      const nodes: Node[] = await Promise.all(
+        parent.timeline.entries.map(async (e) => {
+          const files = parent.line ? e.files.slice(0, 1) : pickFiles(e, request.target.path);
+          const [avatar, commitUrl] = await Promise.all([
+            this.avatars.get(e.authorName, e.authorEmail, { repo: request.repo, sha: e.sha }),
+            this.avatars.commitUrl(request.repo, e.sha),
+          ]);
+          return new CommitNode(e, repoRoot, files, parent.line ? e.line : undefined, parent.firstLabel, avatar, commitUrl);
+        }),
+      );
       if (parent.timeline.truncated) nodes.push(info(`Showing the newest ${parent.timeline.entries.length} commits`, 'ellipsis', 'Raise gitInsight.history.maxCommits to see more.'));
       return nodes;
     }
@@ -113,7 +126,7 @@ export class CodeHistoryTree implements vscode.TreeDataProvider<Node>, vscode.Di
   }
 
   dispose(): void {
-    this.subscription.dispose();
+    this.subscriptions.forEach((d) => d.dispose());
     this.view.dispose();
     this.changed.dispose();
   }
@@ -160,8 +173,4 @@ function info(label: string, icon: string, tooltip?: string): Node {
 
 function describeFile(file: FileRef): string {
   return file.oldPath ? `${file.status}: ${file.oldPath} → ${file.path}` : `${file.status}: ${file.path}`;
-}
-
-function escape(text: string): string {
-  return text.replace(/[\\`*_{}[\]()#+\-.!<>|$]/g, '\\$&');
 }

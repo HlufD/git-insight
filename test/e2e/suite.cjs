@@ -173,6 +173,35 @@ exports.run = async function run() {
     assert.match(api.history.state.error, /not been committed/);
   });
 
+  await step('history rows show avatars, and the hover shows name and @username', async () => {
+    const v3 = v2.replace('const unit = 3;', 'const unit = 4;');
+    commitAs('Octo Cat <583231+octocat@users.noreply.github.com>', '2026-09-03T10:00:00+03:00', 'src/pricing.ts', v3, 'Raise unit price');
+    const doc = await vscode.workspace.openTextDocument(path.join(root, 'src/pricing.ts'));
+    const ed = await vscode.window.showTextDocument(doc);
+    ed.selection = new vscode.Selection(2, 4, 2, 4);
+    await api.history.whoWroteThis(ed);
+    const tree = api.trees.codeHistory;
+    const sections = await tree.getChildren();
+    const section = sections.find((n) => n.collapsibleState === vscode.TreeItemCollapsibleState.Expanded);
+    const rows = await tree.getChildren(section);
+    assert.equal(rows[0].label, 'Raise unit price');
+    assert.ok(rows[0].iconPath instanceof vscode.Uri && rows[0].iconPath.fsPath.endsWith('.svg'), 'avatar icon');
+    const tip = rows[0].tooltip.value;
+    assert.match(tip, /\*\*Octo Cat\*\*/);
+    assert.match(tip, /\[@octocat\]\(https:\/\/github\.com\/octocat\)/);
+    assert.ok(tip.replace(/\\/g, '').includes('583231+octocat@users.noreply.github.com'), 'email in hover');
+    assert.match(rows.at(-1).description, /★/);
+    assert.ok(fs.readFileSync(rows[1].iconPath.fsPath, 'utf8').includes('<svg'), 'initials svg exists');
+  });
+
+  await step('contributor rows show avatars', async () => {
+    await api.stats.refresh();
+    const rows = await api.trees.contributors.getChildren();
+    const person = rows.find((r) => r.contextValue === 'gitInsight.contributor');
+    assert.ok(person.iconPath instanceof vscode.Uri && person.iconPath.fsPath.endsWith('.svg'));
+    assert.match(person.tooltip.value, /Commits/);
+  });
+
   fs.writeFileSync(process.env.GI_E2E_RESULTS, results.join('\n') + '\n');
   if (results.some((r) => r.startsWith('FAIL'))) throw new Error(results.join('\n'));
 };

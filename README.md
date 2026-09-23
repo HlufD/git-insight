@@ -68,6 +68,8 @@ How the history is found:
 
 Line history follows the code across file renames.
 
+Each commit shows the author's **avatar**. Hover over a commit for a card with a larger avatar, the author's name, **@GitHub username** (linked to their profile) and email, plus the commit's date, SHA and a *View on GitHub* link when the repository is hosted there. The Contributors list uses the same avatars.
+
 A second section lists commits **on any branch** that added or removed the name (`git log -S --all`). This finds where a function first appeared, even if it came from another file or branch. Turn it off with `gitInsight.history.searchAllBranches` on very large repositories.
 
 ## Commands
@@ -97,6 +99,7 @@ A second section lists commits **on any branch** that added or removed the name 
 | `gitInsight.stats.treeLimit` | `20` | Contributors listed in the sidebar |
 | `gitInsight.history.maxCommits` | `200` | Commits loaded for a code or file history |
 | `gitInsight.history.searchAllBranches` | `true` | Also list commits on any branch that added or removed the name |
+| `gitInsight.avatars.source` | `remote` | `remote`: GitHub or Gravatar pictures and GitHub usernames, falling back to initials. `initials`: no network |
 
 ## Performance and caching
 
@@ -112,9 +115,17 @@ Every scan runs with a cancellable progress notification; cancelling kills the g
 - **Submodules** are not analysed. In a multi-root workspace each folder's repository can be selected.
 - `.mailmap` export maps the identities as Git Insight sees them, which is after your existing `.mailmap` has been applied.
 
-## Privacy
+## Avatars and privacy
 
-All features run locally. Git Insight makes no network requests.
+Everything except avatars runs locally, with no network access.
+
+With the default `gitInsight.avatars.source` of `remote`, Git Insight looks for a picture and username for each author, once per email, and remembers the answer:
+
+1. **GitHub noreply emails** (`12345+name@users.noreply.github.com`) give the username without any network request. The picture is downloaded from GitHub.
+2. **Repositories whose `origin` is on GitHub**: Git Insight asks the GitHub API which account made one of the author's commits. This sends the repository name and a commit SHA. If you are already signed in to GitHub in VS Code, that session is reused so private repositories work; otherwise only public repositories can be looked up.
+3. **Anyone else**: a SHA-256 hash of the email is sent to Gravatar.
+
+When there is no picture, or you are offline, a coloured circle with the author's initials is shown instead. Set `gitInsight.avatars.source` to `initials` to never contact GitHub or Gravatar. **Git Insight: Clear Cache** also forgets stored avatars.
 
 ## Development
 

@@ -5,7 +5,9 @@ import { Commands } from '../constants';
 import { describeFilter, isFilterActive } from '../stats/filterSummary';
 import { formatCount, formatReadableDate } from '../stats/formatDate';
 import type { Contributor } from '../stats/report';
+import type { AvatarService, PersonAvatar } from '../services/AvatarService';
 import type { StatsService } from '../services/StatsService';
+import { escapeMd, personTooltip } from './personTooltip';
 
 type Node = vscode.TreeItem;
 
@@ -14,11 +16,11 @@ export class ContributorsTree implements vscode.TreeDataProvider<Node>, vscode.D
   private readonly changed = new vscode.EventEmitter<void>();
   readonly onDidChangeTreeData = this.changed.event;
   private readonly view: vscode.TreeView<Node>;
-  private readonly subscription: vscode.Disposable;
+  private readonly subscriptions: vscode.Disposable[];
 
-  constructor(viewId: string, private readonly stats: StatsService) {
+  constructor(viewId: string, private readonly stats: StatsService, private readonly avatars: AvatarService) {
     this.view = vscode.window.createTreeView(viewId, { treeDataProvider: this, showCollapseAll: false });
-    this.subscription = stats.onDidChange(() => this.render());
+    this.subscriptions = [stats.onDidChange(() => this.render()), avatars.onDidChange(() => this.changed.fire())];
     this.render();
   }
 
@@ -33,7 +35,7 @@ export class ContributorsTree implements vscode.TreeDataProvider<Node>, vscode.D
     return node;
   }
 
-  getChildren(parent?: Node): Node[] {
+  async getChildren(parent?: Node): Promise<Node[]> {
     if (parent) return [];
     const state = this.stats.state;
     if (!state.repo) return [];
@@ -59,7 +61,9 @@ export class ContributorsTree implements vscode.TreeDataProvider<Node>, vscode.D
     }
 
     const limit = readConfig(vscode.Uri.file(state.repo.root)).treeLimit;
-    report.contributors.slice(0, limit).forEach((c, i) => nodes.push(contributorNode(c, i + 1)));
+    const top = report.contributors.slice(0, limit);
+    const avatars = await Promise.all(top.map((c) => this.avatars.get(c.name, c.email)));
+    top.forEach((c, i) => nodes.push(contributorNode(c, i + 1, avatars[i]!)));
     const more = report.contributors.length - limit;
     if (more > 0) nodes.push(action(`${more} more…`, undefined, Commands.showContributorStats, 'ellipsis'));
     if (report.contributors.length === 0) nodes.push(info('No commits match the current filters', 'info'));
@@ -67,22 +71,21 @@ export class ContributorsTree implements vscode.TreeDataProvider<Node>, vscode.D
   }
 
   dispose(): void {
-    this.subscription.dispose();
+    this.subscriptions.forEach((d) => d.dispose());
     this.view.dispose();
     this.changed.dispose();
   }
 }
 
-function contributorNode(c: Contributor, rank: number): Node {
+function contributorNode(c: Contributor, rank: number, avatar: PersonAvatar): Node {
   const total = c.commits + c.merges;
   const item = new vscode.TreeItem(c.name);
   item.id = c.id;
   item.description = `${formatCount(total)} commit${total === 1 ? '' : 's'} · +${formatCount(c.added)} −${formatCount(c.removed)}`;
-  item.iconPath = new vscode.ThemeIcon(c.identities.length > 1 ? 'organization' : 'person');
+  item.iconPath = avatar.icon;
   item.contextValue = 'gitInsight.contributor';
-  const tooltip = new vscode.MarkdownString(undefined, true);
-  tooltip.appendMarkdown(`**#${rank} ${escape(c.name)}**\n\n`);
-  if (c.emails.length) tooltip.appendMarkdown(`${c.emails.map(escape).join(', ')}\n\n`);
+  const tooltip = personTooltip(c.name, c.emails, avatar);
+  tooltip.appendMarkdown(`---\n\n#${rank} by commits\n\n`);
   tooltip.appendMarkdown(
     [
       `| | |`,
@@ -96,7 +99,7 @@ function contributorNode(c: Contributor, rank: number): Node {
       `| Last commit | ${formatReadableDate(c.lastDate, { shortMonth: true })} |`,
     ].join('\n'),
   );
-  if (c.identities.length > 1) tooltip.appendMarkdown(`\n\nGroups ${c.identities.length} identities.`);
+  if (c.identities.length > 1) tooltip.appendMarkdown(`\n\nGroups ${c.identities.length} identities: ${c.identities.map(escapeMd).join(', ')}`);
   item.tooltip = tooltip;
   item.command = { command: Commands.showContributorStats, title: 'Show Contributor Stats', arguments: [c.id] };
   return item;
@@ -115,8 +118,4 @@ function info(label: string, icon: string): Node {
   const item = new vscode.TreeItem(label);
   item.iconPath = new vscode.ThemeIcon(icon);
   return item;
-}
-
-function escape(text: string): string {
-  return text.replace(/[\\`*_{}[\]()#+\-.!<>|]/g, '\\$&');
 }
